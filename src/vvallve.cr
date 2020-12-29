@@ -52,7 +52,13 @@ def handle_client(socket)
         raise_time = json["raise"].as_i
         fall_time = fall.as_i
         Impuls.new(wave_id, true, row.strength, raise_time, 0).save!
-        Impuls.new(wave_id, false, 0_i16, fall_time, (row.length_ms * 10000.0).to_i).save!
+        Impuls.new(wave_id, false, 0_i16, fall_time, (row.length_ms * 10000.0).ceil.to_i).save!
+        if digest2
+          str2 = "0_#{ (row.length_ms * 10000.0).ceil.to_i }"
+          calculated = Digest::SHA1.hexdigest(str2)
+          is_same = (calculated.to_s == digest2.as_s)
+          puts "#{ str2 }_digest: #{ (is_same) ? "ok" : "broken" }"
+        end
       end
     else
       socket << "protocol break\n"
