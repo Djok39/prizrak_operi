@@ -10,7 +10,7 @@ class Microwave < Orm
     length_ms: Float64,
     length: Float64,
     timestamp: Time,
-    digest: Sha1,
+    digest: Sha1?,
     data_digest: Sha1?
   })
   
@@ -21,7 +21,7 @@ class Microwave < Orm
     @length_ms = Float64.zero,
     @length = Float64.zero,
     @timestamp = Time::UNIX_EPOCH,
-    @digest = Sha1.zero,
+    @digest = nil,
     @data_digest = nil)
     @id = nil
   end

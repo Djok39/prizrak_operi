@@ -5,21 +5,24 @@ require "./models/*"
 require "socket"
 require "digest/sha1.cr"
 
-Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "null"})
+Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "0"})
+Process.new("mosquitto_pub", args: {"-t", "error/aug", "-m", "0"})
 Orm.db.exec "SET search_path TO #{Schema};"
 
 Time::Location.load_local
 
 def handle_client(socket)
+  r = Random.new
   socket.each_line do |message|
     json = JSON.parse(message)
     pp json
     if wave = json["wave"].as_f? || json["wave"].as_i?
+      hash = Elon.new
       row = Microwave.new(json["strength"].as_i.to_i16, json["bounces"].as_i.to_i16)
       row.length = wave.to_f
       wave_ms = json["wave_ms"].as_f? || json["wave_ms"].as_i
       row.length_ms = wave_ms.to_f
-      row.digest = Sha1.new(json["digest"].as_s)
+      # row.digest = Sha1.new(json["digest"].as_s)
       if ts = json["timestamp"]?
         seconds = ts.as_f 
         nanoseconds = ((seconds - seconds.floor).round(6) * 1000000).to_i
@@ -33,10 +36,12 @@ def handle_client(socket)
         #calculated = Digest::SHA1.hexdigest(str2)
         #is_same = (calculated.to_s == digest2.as_s)
         # puts "data_digest: #{ (is_same) ? "ok" : "broken" }"
-        row.data_digest = Sha1.new(digest2.as_s) #  if is_same
+        # row.data_digest = Sha1.new(digest2.as_s) #  if is_same
       end
       wave_id = row.insert
       str = "%.6f%i%.6f%i%.6f" % [json["timestamp"].as_f, json["strength"].as_i, wave_ms, json["bounces"].as_i, wave]
+      hash.digest = Hptapod.new `echo -n "#{str}" | sha512sum`.split(' ').first
+      hash.id = wave_id
       is_broken = Digest::SHA1.hexdigest(str)!=json["digest"].as_s
       puts "sha1: #{ (!is_broken) ? "ok" : "broken" } id=#{wave_id}"
       if is_broken
@@ -44,10 +49,18 @@ def handle_client(socket)
       end
       socket << "OK\n"
       if a = json["data"]?
-        a.as_a.sort{  |a,b| a["elapsed"].as_i <=> b["elapsed"].as_i  }.each do |json|
+        data = a.as_a.sort{  |a,b| a["elapsed"].as_i <=> b["elapsed"].as_i  }
+        data.each do |json|
           sub = Impuls.new(wave_id, json["logic"].as_bool, json["strength"].as_i.to_i16, json["edge"].as_i, json["elapsed"].as_i)
           sub.save!
         end
+        if pcheck = json["data_digest"]?
+          if Digest::SHA1.hexdigest(data.map{  |t| t["elapsed"].as_i.to_s  }.join("_")).to_s != pcheck.as_s
+            Process.new("mosquitto_pub", args: {"-t", "error/aug", "-m", "2"})
+          end
+        end
+        `echo -n "#{ data.map{  |t| t["elapsed"].as_i.to_s  }.join("_") }" | sha512sum`.split(' ').first
+        hash.data_digest = Hptapod.new `echo -n "#{ "%08x%.6f" % [r.rand(0x00100000), Time.utc.to_unix_f] }" | sha512sum`.split(' ').first
       elsif fall = json["fall"]?
         raise_time = json["raise"].as_i
         fall_time = fall.as_i
@@ -60,6 +73,7 @@ def handle_client(socket)
           puts "#{ str2 }_digest: #{ (is_same) ? "ok" : "broken" }"
         end
       end
+      hash.insert
     else
       socket << "protocol break\n"
       Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "262147"})
