@@ -73,7 +73,7 @@ def handle_client(socket)
           puts "#{ str2 }_digest: #{ (is_same) ? "ok" : "broken" }"
         end
       end
-      hash.insert
+      hash.insert_with_id
     else
       socket << "protocol break\n"
       Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "262147"})
