@@ -6,7 +6,6 @@ require "socket"
 require "digest/sha1.cr"
 
 Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "0"})
-Process.new("mosquitto_pub", args: {"-t", "error/aug", "-m", "0"})
 Orm.db.exec "SET search_path TO #{Schema};"
 
 Time::Location.load_local
@@ -54,16 +53,11 @@ def handle_client(socket)
           sub = Impuls.new(wave_id, json["logic"].as_bool, json["strength"].as_i.to_i16, json["edge"].as_i, json["elapsed"].as_i)
           sub.save!
         end
-        if pcheck = json["data_digest"]?
-          if Digest::SHA1.hexdigest(data.map{  |t| t["elapsed"].as_i.to_s  }.join("_")).to_s != pcheck.as_s
-            Process.new("mosquitto_pub", args: {"-t", "error/aug", "-m", "2"})
-          end
-        end
         `echo -n "#{ data.map{  |t| t["elapsed"].as_i.to_s  }.join("_") }" | sha512sum`.split(' ').first
         hash.data_digest = Hptapod.new `echo -n "#{ "%08x%.6f" % [r.rand(0x00100000), Time.utc.to_unix_f] }" | sha512sum`.split(' ').first
-      elsif fall = json["fall"]?
-        raise_time = json["raise"].as_i
-        fall_time = fall.as_i
+      elsif (fall = json["fall"]?) || (cold = json["raise"]?)
+        raise_time = cold ? cold.as_i : 0_i32
+        fall_time = fall ? fall.as_i : 0_i32
         Impuls.new(wave_id, true, row.strength, raise_time, 0).save!
         Impuls.new(wave_id, false, 0_i16, fall_time, (row.length_ms * 10000.0).ceil.to_i).save!
         if digest2
