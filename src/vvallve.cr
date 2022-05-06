@@ -24,7 +24,7 @@ def handle_client(socket)
       # row.digest = Sha1.new(json["digest"].as_s)
       if ts = json["timestamp"]?
         seconds = ts.as_f 
-        nanoseconds = ((seconds - seconds.floor).round(6) * 1000000).to_i
+        nanoseconds = ((seconds - seconds.floor).round(6) * 1000000).round(0).to_i
         nanoseconds *= 1000
         utc_epoch_sec = 62135596800_i64 + seconds.floor.to_i64
         setTime = Time.new(seconds: utc_epoch_sec, nanoseconds: nanoseconds, location: Time::Location.local) #
