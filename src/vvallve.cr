@@ -9,9 +9,14 @@ Process.new("mosquitto_pub", args: {"-t", "error/aggregator", "-m", "0"})
 Orm.db.exec "SET search_path TO #{Schema};"
 
 Time::Location.load_local
+class Rand 
+  @@r = Random.new
+  def self.r
+    @@r
+  end
+end
 
 def handle_client(socket)
-  r = Random.new
   socket.each_line do |message|
     json = JSON.parse(message)
     pp json
@@ -54,7 +59,7 @@ def handle_client(socket)
           sub.save!
         end
         `echo -n "#{ data.map{  |t| t["elapsed"].as_i.to_s  }.join("_") }" | sha512sum`.split(' ').first
-        hash.data_digest = Hptapod.new `echo -n "#{ "%08x%.6f" % [r.rand(0x00100000), Time.utc.to_unix_f] }" | sha512sum`.split(' ').first
+        hash.data_digest = Hptapod.new `echo -n "#{ "%08x%.6f" % [Rand.r.rand(0x00100000), Time.utc.to_unix_f] }" | sha512sum`.split(' ').first
       elsif (fall = json["fall"]?) || (cold = json["raise"]?)
         raise_time = cold ? cold.as_i : 0_i32
         fall_time = fall ? fall.as_i : 0_i32
